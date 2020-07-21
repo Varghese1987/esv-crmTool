@@ -16,7 +16,7 @@ app.use(cors());
 
 //production URLs:
 const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
-const serverURL= "https://esv-crmTool.herokuapp.com";
+const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
 const dbUrl = "mongodb://localhost:27017";
