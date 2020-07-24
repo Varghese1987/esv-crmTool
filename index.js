@@ -22,7 +22,83 @@ app.use(cors());
 const dbUrl = "mongodb://localhost:27017";
 const serverURL = "http://localhost:3000";
 
-app.post("/addUser", (req, res) => {
+
+// ******************Middlewares to restrict the route access******************
+
+function authenticate(req, res, next) {
+  if (req.headers.authorization == undefined) {
+    res.status(401).json({
+      message: "Not a Valid User",
+    });
+  } else {
+    jwt.verify(req.headers.authorization, "qwert", (err, decoded) => {
+      if (decoded == undefined) {
+        res.status(401).json({
+          message: "Not a Valid User",
+        });
+      } else {
+        next();
+      }
+    });
+  }
+}
+
+function employeeBasic(req, res, next) {
+  if (req.headers.role == undefined) {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (req.headers.role == "employeeLevel_1") {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+function employee(req, res, next) {
+  if (req.headers.role == undefined || req.headers.role == "employeeLevel_1") {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (
+      req.headers.role == "employeeLevel_2" ||
+      req.headers.role == "admin" ||
+      req.headers.role == "manager"
+    ) {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+function admin(req, res, next) {
+  if (req.headers.role == undefined) {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (req.headers.role == "admin" || req.headers.role == "manager") {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+// ******************End of Middle Ware Section******************
+
+
+app.post("/addUser", [authenticate, admin], (req, res) => {
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
     let db = client.db("crmTool");
@@ -262,75 +338,6 @@ app.post("/login", (req, res) => {
   });
 });
 
-function authenticate(req, res, next) {
-  if (req.headers.authorization == undefined) {
-    res.status(401).json({
-      message: "Not a Valid User",
-    });
-  } else {
-    jwt.verify(req.headers.authorization, "qwert", (err, decoded) => {
-      if (decoded == undefined) {
-        res.status(401).json({
-          message: "Not a Valid User",
-        });
-      } else {
-        next();
-      }
-    });
-  }
-}
-
-function employeeBasic(req, res, next) {
-  if (req.headers.role == undefined) {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (req.headers.role == "employeeLevel_1") {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
-}
-
-function employee(req, res, next) {
-  if (req.headers.role == undefined || req.headers.role == "employeeLevel_1") {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (
-      req.headers.role == "employeeLevel_2" ||
-      req.headers.role == "admin" ||
-      req.headers.role == "manager"
-    ) {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
-}
-
-function admin(req, res, next) {
-  if (req.headers.role == undefined) {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (req.headers.role == "admin" || req.headers.role == "manager") {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
-}
 
 app.post("/createSR/:id", [authenticate, admin, employee], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
@@ -489,7 +496,48 @@ app.put("/updateSR/:id", [authenticate, employee], (req, res) => {
   });
 });
 
-app.put("/updateLead/:id", [authenticate, employee], (req, res) => {});
+app.put("/updateLead/:id", [authenticate, employee], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("lead").findOne({ _id: objId }, (err, data) => {
+      if (err) throw err;
+      if (data) {
+        let status = {
+          created: true,
+          open: true,
+          inprocess: true,
+          released: true,
+          cancelled: true,
+          completed: true,
+        };
+        if (status[req.body.status]) {
+          let placeHolder = {};
+          placeHolder[req.body.status] = status[req.body.status];
+          db.collection("lead").updateOne(
+            { _id: objId },
+            { $set: placeHolder },
+            { upsert: true },
+            (err, data) => {
+              client.close();
+              if (err) throw err;
+              if (data) {
+                res.status(200).json({
+                  message: "status updated",
+                });
+              }
+            }
+          );
+        }
+      } else {
+        res.status(401).json({
+          message: "Provided details doesnt match",
+        });
+      }
+    });
+  });
+});
 
 app.put("/updateContact/:id", [authenticate, employee], (req, res) => {});
 
