@@ -541,9 +541,8 @@ app.put("/updateLead/:id", [authenticate, employee], (req, res) => {
 
 app.put("/updateContact/:id", [authenticate, employee], (req, res) => {});
 
-app.get("", [authenticate, admin], (req, res) => {
-  console.log("admin view");
-  res.send("success");
+app.get("/", (req, res) => {
+  res.send("Welcome to CRM Tool");
 });
 
 app.listen(process.env.PORT || 3000, () => {
