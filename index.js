@@ -15,12 +15,12 @@ app.use(bodyParser.json());
 app.use(cors());
 
 //production URLs:
-// const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
-// const serverURL= "https://esv-crmtool.herokuapp.com";
+const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
+const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
-const dbUrl = "mongodb://localhost:27017";
-const serverURL = "http://localhost:3000";
+// const dbUrl = "mongodb://localhost:27017";
+// const serverURL = "http://localhost:3000";
 
 
 // ******************Middlewares to restrict the route access******************
