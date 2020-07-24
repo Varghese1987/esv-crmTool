@@ -15,12 +15,12 @@ app.use(bodyParser.json());
 app.use(cors());
 
 //production URLs:
-const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
-const serverURL= "https://esv-crmtool.herokuapp.com";
+// const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
+// const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
-// const dbUrl = "mongodb://localhost:27017";
-// const serverURL = "http://localhost:3000";
+const dbUrl = "mongodb://localhost:27017";
+const serverURL = "http://localhost:3000";
 
 app.post("/addUser", (req, res) => {
   mongoClient.connect(dbUrl, (err, client) => {
@@ -233,7 +233,7 @@ app.post("/login", (req, res) => {
               jwt.sign(
                 { userid: data._id },
                 "qwert",
-                { expiresIn: "1h" },
+                { expiresIn: "12h" },
                 (err, token) => {
                   res.status(200).json({
                     message: "success",
@@ -280,7 +280,59 @@ function authenticate(req, res, next) {
   }
 }
 
-app.post("/createSR/:id", [authenticate], (req, res) => {
+function employeeBasic(req, res, next) {
+  if (req.headers.role == undefined) {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (req.headers.role == "employeeLevel_1") {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+function employee(req, res, next) {
+  if (req.headers.role == undefined || req.headers.role == "employeeLevel_1") {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (
+      req.headers.role == "employeeLevel_2" ||
+      req.headers.role == "admin" ||
+      req.headers.role == "manager"
+    ) {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+function admin(req, res, next) {
+  if (req.headers.role == undefined) {
+    res.status(401).json({
+      message: "Role was not assigned to view this page",
+    });
+  } else {
+    if (req.headers.role == "admin" || req.headers.role == "manager") {
+      next();
+    } else {
+      res.status(401).json({
+        message: "Role doesnt ave access to this page",
+      });
+    }
+  }
+}
+
+app.post("/createSR/:id", [authenticate, admin, employee], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
@@ -307,7 +359,7 @@ app.post("/createSR/:id", [authenticate], (req, res) => {
   });
 });
 
-app.post("/createLead/:id", [authenticate], (req, res) => {
+app.post("/createLead/:id", [authenticate, employee], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
@@ -321,7 +373,12 @@ app.post("/createLead/:id", [authenticate], (req, res) => {
       email: req.body.email,
       phone: req.body.phone,
       category: req.body.category,
-      new:true,contacted:false,qualified:true,lost:false,cancelled:false,confirmed:false,
+      new: true,
+      contacted: false,
+      qualified: true,
+      lost: false,
+      cancelled: false,
+      confirmed: false,
       description: req.body.description,
       userId: objId,
     };
@@ -336,12 +393,12 @@ app.post("/createLead/:id", [authenticate], (req, res) => {
   });
 });
 
-app.post("/createContact/:id", [authenticate], (req, res) => {
+app.post("/createContact/:id", [authenticate, admin, employee], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
     let db = client.db("crmTool");
-    db.collection("Contact").insertOne(req.body, (err, data) => {
+    db.collection("contact").insertOne(req.body, (err, data) => {
       if (err) throw err;
       if (data) {
         res.status(200).json({
@@ -350,6 +407,95 @@ app.post("/createContact/:id", [authenticate], (req, res) => {
       }
     });
   });
+});
+
+app.get("/dashboard", [authenticate], (req, res) => {
+  // console.log("employee basic view");
+  // res.send("success");
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("sr")
+      .find({})
+      .toArray()
+      .then((sr) => {
+        db.collection("lead")
+          .find({})
+          .toArray()
+          .then((lead) => {
+            db.collection("contact")
+              .find({})
+              .toArray()
+              .then((contact) => {
+                client.close();
+                res.status(200).json({
+                  sr: sr,
+                  lead: lead,
+                  contact: contact,
+                });
+              })
+              .catch((error) => {
+                //console.log(error);
+              });
+          })
+          .catch((error) => {
+            //console.log(error);
+          });
+      })
+      .catch((error) => {
+        //console.log(error);
+      });
+  });
+});
+
+app.put("/updateSR/:id", [authenticate, employee], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("sr").findOne({ _id: objId }, (err, data) => {
+      if (err) throw err;
+      if (data) {
+        let status = {
+          inprocess: true,
+          released: true,
+          cancelled: true,
+          completed: true,
+        };
+        if (status[req.body.status]) {
+          let placeHolder = {};
+          placeHolder[req.body.status] = status[req.body.status];
+          db.collection("sr").updateOne(
+            { _id: objId },
+            { $set: placeHolder },
+            { upsert: true },
+            (err, data) => {
+              client.close();
+              if (err) throw err;
+              if (data) {
+                res.status(200).json({
+                  message: "status updated",
+                });
+              }
+            }
+          );
+        }
+      } else {
+        res.status(401).json({
+          message: "Provided details doesnt match",
+        });
+      }
+    });
+  });
+});
+
+app.put("/updateLead/:id", [authenticate, employee], (req, res) => {});
+
+app.put("/updateContact/:id", [authenticate, employee], (req, res) => {});
+
+app.get("", [authenticate, admin], (req, res) => {
+  console.log("admin view");
+  res.send("success");
 });
 
 app.listen(process.env.PORT || 3000, () => {
