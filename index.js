@@ -98,7 +98,7 @@ function admin(req, res, next) {
 // ******************End of Middle Ware Section******************
 
 
-app.post("/addUser", [authenticate, admin], (req, res) => {
+app.post("/addUser", (req, res) => {
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
     let db = client.db("crmTool");
