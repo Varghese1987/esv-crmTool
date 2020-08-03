@@ -20,7 +20,8 @@ const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
 // const dbUrl = "mongodb://localhost:27017";
-// const serverURL = "http://localhost:3000";
+//const serverURL = "http://localhost:3000";
+// const dbUrl = "mongodb://13.127.169.233:27017/sample";
 
 
 // ******************Middlewares to restrict the route access******************
@@ -97,7 +98,7 @@ function admin(req, res, next) {
 
 // ******************End of Middle Ware Section******************
 
-
+let empId = 100000;
 app.post("/addUser", (req, res) => {
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
@@ -116,9 +117,10 @@ app.post("/addUser", (req, res) => {
               if (err) throw err;
               if (data) {
                 let string = randomstring.generate();
+                empId = empId+1;
                 db.collection("users").updateOne(
                   { email: req.body.email },
-                  { $set: { randomstring: string, activate: false } },
+                  { $set: { randomstring: string, activate: false,empId } },
                   { upsert: true },
                   (err, response) => {
                     client.close();
@@ -166,14 +168,14 @@ app.post("/addUser", (req, res) => {
 });
 
 app.get("/activateuser/:string", (req, res) => {
-  console.log(req.params.string);
+  //console.log(req.params.string);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
     let db = client.db("crmTool");
     db.collection("users").findOne(
       { randomstring: req.params.string },
       (err, data) => {
-        console.log(data);
+        //console.log(data);
         if (err) throw err;
         if (data) {
           db.collection("users").updateOne(
@@ -303,6 +305,7 @@ app.post("/login", (req, res) => {
     db.collection("users").findOne({ email: req.body.email }, (err, data) => {
       client.close();
       if (data) {
+        //console.log(data)
         if (data.activate) {
           bcrypt.compare(req.body.password, data.password, (err, result) => {
             if (result) {
@@ -311,11 +314,16 @@ app.post("/login", (req, res) => {
                 "qwert",
                 { expiresIn: "12h" },
                 (err, token) => {
-                  res.status(200).json({
-                    message: "success",
-                    token: token,
-                    userId: data._id,
-                  });
+                  if(err) throw err;
+                  if(token){
+                    res.status(200).json({
+                      message: "success",
+                      token: token,
+                      userId: data._id,
+                      role:data.role
+                    });
+                    
+                  }
                 }
               );
             } else {
@@ -338,6 +346,64 @@ app.post("/login", (req, res) => {
   });
 });
 
+app.get("/userList",(req,res)=>{
+  mongoClient.connect(dbUrl,(err,client)=>{
+      if(err) throw err;
+      let db = client.db("crmTool");
+      db.collection("users").find().toArray().then((data)=>{
+          res.status(200).json(data);
+      })
+      .catch((error)=>{
+          console.log(error);
+      })
+  })
+})
+
+app.get("/user/:id",(req,res)=>{
+  let objId = mongodb.ObjectID(req.params.id)
+  mongoClient.connect(dbUrl,(err,client)=>{
+      if(err) throw err;
+      let db = client.db("crmTool");
+      db.collection("users").findOne({_id : objId},(err,data)=>{
+          if(err) throw err;
+          client.close();
+          res.status(200).json(data);
+      })
+  })
+})
+
+app.put("/user/:id",(req,res)=>{
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl,(err,client)=>{
+      if(err) throw err;
+      let db = client.db("crmTool");
+      db.collection("users")
+      .findOneAndUpdate({_id : objId},
+        {$set:{firstName:req.body.firstName, lastName:req.body.lastName, email:req.body.email, role:req.body.role}},
+        { upsert: true })
+      .then((data)=>{
+          client.close();
+          res.status(200).json({
+            message:"success"
+          });
+      })
+  })
+})
+
+app.delete("/user/:id",(req,res)=>{
+  let objId = mongodb.ObjectID(req.params.id)
+  mongoClient.connect(dbUrl,(err,client)=>{
+      if(err) throw err;
+      let db = client.db("crmTool");
+      db.collection("users").findOneAndDelete({_id : objId},(err,data)=>{
+          if(err) throw err;
+          client.close();
+          res.status(200).json({
+            message:"record Deleted"
+          });
+      })
+  })
+})
 
 app.post("/createSR/:id", [authenticate, admin, employee], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
