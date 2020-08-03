@@ -9,20 +9,21 @@ const randomstring = require("randomstring");
 const nodemailer = require("nodemailer");
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
+const { response } = require("express");
 dotenv.config();
 
 app.use(bodyParser.json());
 app.use(cors());
 
 //production URLs:
-const dbUrl = "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority"
+const dbUrl =
+  "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority";
 const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
 // const dbUrl = "mongodb://localhost:27017";
 //const serverURL = "http://localhost:3000";
 // const dbUrl = "mongodb://13.127.169.233:27017/sample";
-
 
 // ******************Middlewares to restrict the route access******************
 
@@ -32,68 +33,30 @@ function authenticate(req, res, next) {
       message: "Not a Valid User",
     });
   } else {
+    //console.log(req.headers.authorization)
     jwt.verify(req.headers.authorization, "qwert", (err, decoded) => {
+      //console.log(decoded)
       if (decoded == undefined) {
         res.status(401).json({
           message: "Not a Valid User",
         });
       } else {
+        req.role = decoded.role;
+        //console.log(req.role)
         next();
       }
     });
   }
 }
 
-function employeeBasic(req, res, next) {
-  if (req.headers.role == undefined) {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (req.headers.role == "employeeLevel_1") {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
-}
-
-function employee(req, res, next) {
-  if (req.headers.role == undefined || req.headers.role == "employeeLevel_1") {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (
-      req.headers.role == "employeeLevel_2" ||
-      req.headers.role == "admin" ||
-      req.headers.role == "manager"
-    ) {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
-}
-
-function admin(req, res, next) {
-  if (req.headers.role == undefined) {
-    res.status(401).json({
-      message: "Role was not assigned to view this page",
-    });
-  } else {
-    if (req.headers.role == "admin" || req.headers.role == "manager") {
-      next();
-    } else {
-      res.status(401).json({
-        message: "Role doesnt ave access to this page",
-      });
-    }
-  }
+function permit(...allow) {
+  // console.log(allow);
+  const isAllow = (role) => allow.indexOf(role) > -1;
+  return (req, res, next) => {
+    //console.log(req.role)
+    if (isAllow(req.role)) next();
+    else response.status(401).json({ message: "Not authorized" });
+  };
 }
 
 // ******************End of Middle Ware Section******************
@@ -117,10 +80,10 @@ app.post("/addUser", (req, res) => {
               if (err) throw err;
               if (data) {
                 let string = randomstring.generate();
-                empId = empId+1;
+                empId = empId + 1;
                 db.collection("users").updateOne(
                   { email: req.body.email },
-                  { $set: { randomstring: string, activate: false,empId } },
+                  { $set: { randomstring: string, activate: false, empId } },
                   { upsert: true },
                   (err, response) => {
                     client.close();
@@ -310,19 +273,18 @@ app.post("/login", (req, res) => {
           bcrypt.compare(req.body.password, data.password, (err, result) => {
             if (result) {
               jwt.sign(
-                { userid: data._id },
+                { userid: data._id, role: data.role },
                 "qwert",
                 { expiresIn: "12h" },
                 (err, token) => {
-                  if(err) throw err;
-                  if(token){
+                  if (err) throw err;
+                  if (token) {
                     res.status(200).json({
                       message: "success",
                       token: token,
                       userId: data._id,
-                      role:data.role
+                      role: data.role,
                     });
-                    
                   }
                 }
               );
@@ -346,182 +308,324 @@ app.post("/login", (req, res) => {
   });
 });
 
-app.get("/userList",(req,res)=>{
-  mongoClient.connect(dbUrl,(err,client)=>{
-      if(err) throw err;
-      let db = client.db("crmTool");
-      db.collection("users").find().toArray().then((data)=>{
-          res.status(200).json(data);
-      })
-      .catch((error)=>{
-          console.log(error);
-      })
-  })
-})
-
-app.get("/user/:id",(req,res)=>{
-  let objId = mongodb.ObjectID(req.params.id)
-  mongoClient.connect(dbUrl,(err,client)=>{
-      if(err) throw err;
-      let db = client.db("crmTool");
-      db.collection("users").findOne({_id : objId},(err,data)=>{
-          if(err) throw err;
-          client.close();
-          res.status(200).json(data);
-      })
-  })
-})
-
-app.put("/user/:id",(req,res)=>{
-  let objId = mongodb.ObjectID(req.params.id);
-  mongoClient.connect(dbUrl,(err,client)=>{
-      if(err) throw err;
-      let db = client.db("crmTool");
-      db.collection("users")
-      .findOneAndUpdate({_id : objId},
-        {$set:{firstName:req.body.firstName, lastName:req.body.lastName, email:req.body.email, role:req.body.role}},
-        { upsert: true })
-      .then((data)=>{
-          client.close();
-          res.status(200).json({
-            message:"success"
-          });
-      })
-  })
-})
-
-app.delete("/user/:id",(req,res)=>{
-  let objId = mongodb.ObjectID(req.params.id)
-  mongoClient.connect(dbUrl,(err,client)=>{
-      if(err) throw err;
-      let db = client.db("crmTool");
-      db.collection("users").findOneAndDelete({_id : objId},(err,data)=>{
-          if(err) throw err;
-          client.close();
-          res.status(200).json({
-            message:"record Deleted"
-          });
-      })
-  })
-})
-
-app.post("/createSR/:id", [authenticate, admin, employee], (req, res) => {
-  let objId = mongodb.ObjectID(req.params.id);
+app.get("/userList", [authenticate, permit("Admin", "manager")], (req, res) => {
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
     let db = client.db("crmTool");
-    let obj = {
-      sub: req.body.sub,
-      description: req.body.Description,
-      created: true,
-      open: true,
-      inprocess: false,
-      released: false,
-      cancelled: false,
-      completed: false,
-      userId: objId,
-    };
-    db.collection("sr").insertOne(obj, (err, data) => {
-      if (err) throw err;
-      if (data) {
-        res.status(200).json({
-          message: "Data Updated",
-        });
-      }
-    });
-  });
-});
-
-app.post("/createLead/:id", [authenticate, employee], (req, res) => {
-  let objId = mongodb.ObjectID(req.params.id);
-  mongoClient.connect(dbUrl, (err, client) => {
-    if (err) throw err;
-    let db = client.db("crmTool");
-    let obj = {
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      middleName: req.body.middleName,
-      company: req.body.company,
-      access: req.body.access,
-      email: req.body.email,
-      phone: req.body.phone,
-      category: req.body.category,
-      new: true,
-      contacted: false,
-      qualified: true,
-      lost: false,
-      cancelled: false,
-      confirmed: false,
-      description: req.body.description,
-      userId: objId,
-    };
-    db.collection("lead").insertOne(obj, (err, data) => {
-      if (err) throw err;
-      if (data) {
-        res.status(200).json({
-          message: "Data Updated",
-        });
-      }
-    });
-  });
-});
-
-app.post("/createContact/:id", [authenticate, admin, employee], (req, res) => {
-  let objId = mongodb.ObjectID(req.params.id);
-  mongoClient.connect(dbUrl, (err, client) => {
-    if (err) throw err;
-    let db = client.db("crmTool");
-    db.collection("contact").insertOne(req.body, (err, data) => {
-      if (err) throw err;
-      if (data) {
-        res.status(200).json({
-          message: "Data Updated",
-        });
-      }
-    });
-  });
-});
-
-app.get("/dashboard", [authenticate], (req, res) => {
-  // console.log("employee basic view");
-  // res.send("success");
-  mongoClient.connect(dbUrl, (err, client) => {
-    if (err) throw err;
-    let db = client.db("crmTool");
-    db.collection("sr")
-      .find({})
+    db.collection("users")
+      .find()
       .toArray()
-      .then((sr) => {
-        db.collection("lead")
-          .find({})
-          .toArray()
-          .then((lead) => {
-            db.collection("contact")
-              .find({})
-              .toArray()
-              .then((contact) => {
-                client.close();
-                res.status(200).json({
-                  sr: sr,
-                  lead: lead,
-                  contact: contact,
-                });
-              })
-              .catch((error) => {
-                //console.log(error);
-              });
-          })
-          .catch((error) => {
-            //console.log(error);
-          });
+      .then((data) => {
+        res.status(200).json(data);
       })
       .catch((error) => {
-        //console.log(error);
+        console.log(error);
       });
   });
 });
 
-app.put("/updateSR/:id", [authenticate, employee], (req, res) => {
+app.get("/user/:id", [authenticate, permit("Admin", "manager")], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("users").findOne({ _id: objId }, (err, data) => {
+      if (err) throw err;
+      client.close();
+      res.status(200).json(data);
+    });
+  });
+});
+
+app.put("/user/:id", [authenticate, permit("Admin", "manager")], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("users")
+      .findOneAndUpdate(
+        { _id: objId },
+        {
+          $set: {
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            email: req.body.email,
+            role: req.body.role,
+          },
+        },
+        { upsert: true }
+      )
+      .then((data) => {
+        client.close();
+        res.status(200).json({
+          message: "success",
+        });
+      });
+  });
+});
+
+app.delete(
+  "/user/:id",
+  [authenticate, permit("Admin", "manager")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("users").findOneAndDelete({ _id: objId }, (err, data) => {
+        if (err) throw err;
+        client.close();
+        res.status(200).json({
+          message: "record Deleted",
+        });
+      });
+    });
+  }
+);
+
+let srID = 100000;
+app.post(
+  "/createSr/:id",
+  [authenticate, permit("Admin", "manager", "employeeLevel-2")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      let obj = {
+        sub: req.body.sub,
+        description: req.body.description,
+        created: true,
+        status: "Open",
+        userId: objId,
+        srId: "SR-" + srID + 1,
+      };
+      db.collection("sr").insertOne(obj, (err, data) => {
+        if (err) throw err;
+        if (data) {
+          res.status(200).json({
+            message: "Data Updated",
+          });
+        }
+      });
+    });
+  }
+);
+
+app.get(
+  "/srList",
+  [authenticate, permit("Admin", "manager", "employeeLevel-2")],
+  (req, res) => {
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("sr")
+        .find()
+        .toArray()
+        .then((data) => {
+          res.status(200).json(data);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    });
+  }
+);
+
+app.get("/sr/:id", [authenticate, permit("Admin", "manager")], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("sr").findOne({ _id: objId }, (err, data) => {
+      if (err) throw err;
+      client.close();
+      res.status(200).json(data);
+    });
+  });
+});
+
+app.delete(
+  "/sr/:id",
+  [authenticate, permit("Admin", "manager")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("sr").findOneAndDelete({ _id: objId }, (err, data) => {
+        if (err) throw err;
+        client.close();
+        res.status(200).json({
+          message: "record Deleted",
+        });
+      });
+    });
+  }
+);
+
+leadId = 10000;
+app.post(
+  "/createLead/:id",
+  [authenticate, permit("Admin", "manager", "employeeLevel-2")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      let obj = {
+        leadId: "lead-" + leadId + 1,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        company: req.body.company,
+        email: req.body.email,
+        phone: req.body.phone,
+        category: req.body.category,
+        status: "New",
+        description: req.body.description,
+        userId: objId,
+      };
+      db.collection("lead").insertOne(obj, (err, data) => {
+        if (err) throw err;
+        if (data) {
+          res.status(200).json({
+            message: "Data Updated",
+          });
+        }
+      });
+    });
+  }
+);
+
+app.get(
+  "/leadList",
+  [authenticate, permit("Admin", "manager", "employeeLevel-2")],
+  (req, res) => {
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("lead")
+        .find()
+        .toArray()
+        .then((data) => {
+          res.status(200).json(data);
+        })
+        .catch((error) => {
+          console.log(error);
+        });
+    });
+  }
+);
+
+app.get("/lead/:id", [authenticate, permit("Admin", "manager")], (req, res) => {
+  let objId = mongodb.ObjectID(req.params.id);
+  mongoClient.connect(dbUrl, (err, client) => {
+    if (err) throw err;
+    let db = client.db("crmTool");
+    db.collection("lead").findOne({ _id: objId }, (err, data) => {
+      if (err) throw err;
+      client.close();
+      res.status(200).json(data);
+    });
+  });
+});
+
+app.delete(
+  "/lead/:id",
+  [authenticate, permit("Admin", "manager")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("lead").findOneAndDelete({ _id: objId }, (err, data) => {
+        if (err) throw err;
+        client.close();
+        res.status(200).json({
+          message: "record Deleted",
+        });
+      });
+    });
+  }
+);
+let contact=1000
+
+app.post(
+  "/createContact/:id",
+  [authenticate, permit("Admin", "manager", "employeeLevel-2")],
+  (req, res) => {
+    let objId = mongodb.ObjectID(req.params.id);
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      let obj = {
+        contId: "Contact-" + contact + 1,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        company: req.body.company,
+        email: req.body.email,
+        phone: req.body.phone,
+        userId: objId,
+      };      
+      db.collection("contact").insertOne(obj, (err, data) => {
+        if (err) throw err;
+        if (data) {
+          res.status(200).json({
+            message: "Data Updated",
+          });
+        }
+      });
+    });
+  }
+);
+
+app.get(
+  "/dashboard",
+  [
+    authenticate,
+    permit("admin", "manager", "employeeLevel-1", "employeeLevel-2"),
+  ],
+  (req, res) => {
+    // console.log("employee basic view");
+    // res.send("success");
+    mongoClient.connect(dbUrl, (err, client) => {
+      if (err) throw err;
+      let db = client.db("crmTool");
+      db.collection("sr")
+        .find({})
+        .toArray()
+        .then((sr) => {
+          db.collection("lead")
+            .find({})
+            .toArray()
+            .then((lead) => {
+              db.collection("contact")
+                .find({})
+                .toArray()
+                .then((contact) => {
+                  client.close();
+                  res.status(200).json({
+                    sr: sr,
+                    lead: lead,
+                    contact: contact,
+                  });
+                })
+                .catch((error) => {
+                  //console.log(error);
+                });
+            })
+            .catch((error) => {
+              //console.log(error);
+            });
+        })
+        .catch((error) => {
+          //console.log(error);
+        });
+    });
+  }
+);
+
+app.put("/updateSR/:id", [authenticate], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
@@ -529,30 +633,22 @@ app.put("/updateSR/:id", [authenticate, employee], (req, res) => {
     db.collection("sr").findOne({ _id: objId }, (err, data) => {
       if (err) throw err;
       if (data) {
-        let status = {
-          inprocess: true,
-          released: true,
-          cancelled: true,
-          completed: true,
-        };
-        if (status[req.body.status]) {
-          let placeHolder = {};
-          placeHolder[req.body.status] = status[req.body.status];
-          db.collection("sr").updateOne(
-            { _id: objId },
-            { $set: placeHolder },
-            { upsert: true },
-            (err, data) => {
-              client.close();
-              if (err) throw err;
-              if (data) {
-                res.status(200).json({
-                  message: "status updated",
-                });
-              }
+        let placeHolder = {};
+        placeHolder["status"] = req.body.status;
+        db.collection("sr").updateOne(
+          { _id: objId },
+          { $set: placeHolder },
+          { upsert: true },
+          (err, data) => {
+            client.close();
+            if (err) throw err;
+            if (data) {
+              res.status(200).json({
+                message: "status updated",
+              });
             }
-          );
-        }
+          }
+        );
       } else {
         res.status(401).json({
           message: "Provided details doesnt match",
@@ -562,7 +658,7 @@ app.put("/updateSR/:id", [authenticate, employee], (req, res) => {
   });
 });
 
-app.put("/updateLead/:id", [authenticate, employee], (req, res) => {
+app.put("/updateLead/:id", [authenticate], (req, res) => {
   let objId = mongodb.ObjectID(req.params.id);
   mongoClient.connect(dbUrl, (err, client) => {
     if (err) throw err;
@@ -570,32 +666,22 @@ app.put("/updateLead/:id", [authenticate, employee], (req, res) => {
     db.collection("lead").findOne({ _id: objId }, (err, data) => {
       if (err) throw err;
       if (data) {
-        let status = {
-          created: true,
-          open: true,
-          inprocess: true,
-          released: true,
-          cancelled: true,
-          completed: true,
-        };
-        if (status[req.body.status]) {
-          let placeHolder = {};
-          placeHolder[req.body.status] = status[req.body.status];
-          db.collection("lead").updateOne(
-            { _id: objId },
-            { $set: placeHolder },
-            { upsert: true },
-            (err, data) => {
-              client.close();
-              if (err) throw err;
-              if (data) {
-                res.status(200).json({
-                  message: "status updated",
-                });
-              }
+        let placeHolder = {};
+        placeHolder["status"] = req.body.status;
+        db.collection("lead").updateOne(
+          { _id: objId },
+          { $set: placeHolder },
+          { upsert: true },
+          (err, data) => {
+            client.close();
+            if (err) throw err;
+            if (data) {
+              res.status(200).json({
+                message: "status updated",
+              });
             }
-          );
-        }
+          }
+        );
       } else {
         res.status(401).json({
           message: "Provided details doesnt match",
@@ -605,7 +691,7 @@ app.put("/updateLead/:id", [authenticate, employee], (req, res) => {
   });
 });
 
-app.put("/updateContact/:id", [authenticate, employee], (req, res) => {});
+app.put("/updateContact/:id", [authenticate], (req, res) => {});
 
 app.get("/", (req, res) => {
   res.send("Welcome to CRM Tool");
