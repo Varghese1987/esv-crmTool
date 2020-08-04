@@ -22,7 +22,7 @@ const serverURL= "https://esv-crmtool.herokuapp.com";
 
 // development URLs:
 // const dbUrl = "mongodb://localhost:27017";
-//const serverURL = "http://localhost:3000";
+// const serverURL = "http://localhost:3000";
 // const dbUrl = "mongodb://13.127.169.233:27017/sample";
 
 // ******************Middlewares to restrict the route access******************
@@ -42,7 +42,7 @@ function authenticate(req, res, next) {
         });
       } else {
         req.role = decoded.role;
-        //console.log(req.role)
+        console.log(req.role)
         next();
       }
     });
