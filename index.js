@@ -19,11 +19,13 @@ app.use(cors());
 const dbUrl =
   "mongodb+srv://varghese123:varghese123@cluster0-yqune.mongodb.net/<dbname>?retryWrites=true&w=majority";
 const serverURL = "https://esv-crmtool.herokuapp.com";
+const frontEndURL = "https://esv-crm-tool.netlify.app/#/";
 
 // development URLs:
 // const dbUrl = "mongodb://localhost:27017";
 // const serverURL = "http://localhost:3000";
 // const dbUrl = "mongodb://13.127.169.233:27017/sample";
+// const frontEndURL = "http://localhost:4200/#/";
 
 // ******************Middlewares to restrict the route access******************
 
@@ -198,7 +200,7 @@ app.post("/check-user", (req, res) => {
                 to: req.body.email,
                 subject: "Change Password",
                 text: string,
-                html: `<a href='${serverURL}/resetpwd/${string}'>Click her to Rest password</a>`,
+                html: `<a href='${frontEndURL}/resetpwd/${string}'>Click here to Rest password</a>`,
               };
               transporter.sendMail(mailOptions, (err, data) => {
                 if (err) {
@@ -583,7 +585,7 @@ app.get(
   "/dashboard",
   [
     authenticate,
-    permit("admin", "manager", "employeeLevel-1", "employeeLevel-2"),
+    permit("Admin", "manager", "employeeLevel-1", "employeeLevel-2"),
   ],
   (req, res) => {
     // console.log("employee basic view");
