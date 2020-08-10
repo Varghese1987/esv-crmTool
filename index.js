@@ -402,7 +402,7 @@ app.post(
         created: true,
         status: "Open",
         userId: objId,
-        srId: "SR-" + srID + 1,
+        srId: srID + 1,
       };
       db.collection("sr").insertOne(obj, (err, data) => {
         if (err) throw err;
@@ -478,7 +478,7 @@ app.post(
       if (err) throw err;
       let db = client.db("crmTool");
       let obj = {
-        leadId: "lead-" + leadId + 1,
+        leadId: leadId + 1,
         firstName: req.body.firstName,
         lastName: req.body.lastName,
         company: req.body.company,
